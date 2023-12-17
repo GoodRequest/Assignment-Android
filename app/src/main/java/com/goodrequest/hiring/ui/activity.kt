@@ -1,12 +1,38 @@
 package com.goodrequest.hiring.ui
 
 import android.os.Bundle
-import android.view.View.GONE
-import android.view.View.VISIBLE
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.*
 import com.goodrequest.hiring.PokemonApi
-import com.goodrequest.hiring.databinding.ActivityBinding
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.Button
+import androidx.compose.material.Card
+import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.Text
+import androidx.compose.material.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.livedata.observeAsState
+import coil.compose.rememberImagePainter
+import com.goodrequest.hiring.R
 
 class PokemonActivity: ComponentActivity() {
 
@@ -16,27 +42,76 @@ class PokemonActivity: ComponentActivity() {
         val vm by viewModel { PokemonViewModel(it, null, PokemonApi) }
         vm.load()
 
-        ActivityBinding.inflate(layoutInflater).run {
-            setContentView(root)
-            refresh.setOnRefreshListener { vm.load() }
-            retry.setOnClickListener { vm.load() }
-
-            vm.pokemons.observe(this@PokemonActivity) { result: Result<List<Pokemon>>? ->
-                result?.fold(
-                    onSuccess = { pokemons ->
-                        loading.visibility = GONE
-                        val adapter = PokemonAdapter()
-                        items.adapter = adapter
-                        adapter.show(pokemons)
-                    },
-                    onFailure = {
-                        loading.visibility = GONE
-                        failure.visibility = VISIBLE
+        setContent {
+            MaterialTheme {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    TopAppBar(
+                        title = { Text(text = "Gotta Catch 'Em All!") },
+                        backgroundColor = MaterialTheme.colors.primary,
+                        contentColor = Color.White
+                    )
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        val pokemons by vm.pokemons.observeAsState(initial = Result.Failure(Exception()))
+                        when (val result = pokemons) {
+                            is Result.Success<List<Pokemon>> -> PokemonList(pokemons = result.data)
+                            is Result.Failure -> FailureView(onRetry = { vm.load() })
+                            else -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                        }
                     }
-                )
+                }
             }
         }
     }
+
+    @Composable
+    fun PokemonList(pokemons: List<Pokemon>) {
+        LazyColumn {
+            items(pokemons.size) { index ->
+                val pokemon = pokemons[index]
+                Card(
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .fillMaxWidth()
+                        .clickable { /* Handle click here */ }
+                ) {
+                    Column {
+                        pokemon.detail?.let { detail ->
+                            Image(
+                                painter = rememberImagePainter(detail.image) {
+                                    crossfade(true)
+                                    placeholder(R.drawable.ic_launcher_foreground)
+                                },
+                                contentDescription = null,
+                                modifier = Modifier.size(100.dp)
+                            )
+                            Text(text = "Move: ${detail.move}", modifier = Modifier.padding(16.dp))
+                            Text(text = "Weight: ${detail.weight}", modifier = Modifier.padding(16.dp))
+                        }
+                        Text(text = pokemon.name, modifier = Modifier.padding(16.dp))
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun FailureView(onRetry: () -> Unit) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(text = "Something went wrong!", fontSize = 20.sp, modifier = Modifier.padding(bottom = 16.dp))
+            Button(onClick = onRetry) {
+                Text(text = "Try again")
+            }
+        }
+    }
+}
+
+sealed class Result<out T> {
+    data class Success<out T>(val data: T) : Result<T>()
+    data class Failure(val exception: Exception) : Result<Nothing>()
 }
 
 /**
