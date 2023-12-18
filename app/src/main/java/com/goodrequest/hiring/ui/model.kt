@@ -1,14 +1,16 @@
 package com.goodrequest.hiring.ui
 
 import android.content.Context
-import android.util.Log
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.goodrequest.hiring.PokemonApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.net.UnknownHostException
 
 class PokemonViewModel(
@@ -22,22 +24,41 @@ class PokemonViewModel(
     val errorMessage = state.getLiveData<String?>("errorMessage", null)
 
     fun load(forceRefresh: Boolean = false) {
-        Log.d("PokemonViewModel", "load start")
         _state.value = _state.value.copy(isLoading = forceRefresh)
         if (pokemons.value == null || forceRefresh) {
-            viewModelScope.launch {
+            viewModelScope.launch(Dispatchers.IO) { // Use Dispatchers.IO for network operations
                 try {
                     val result = api.getPokemons(page = 1)
-                    pokemons.postValue(result)
-                    _state.value = _state.value.copy(isLoading = false)
+                    withContext(Dispatchers.Main) { // Switch back to main thread to update UI
+                        result.let {
+                            val detailedPokemons = (result as? Result.Success<List<Pokemon>>)?.data?.map { pokemon ->
+                                val detailResult = async { api.getPokemonDetail(pokemon) }
+                                detailResult.await().let { detail ->
+                                    when (detail) {
+                                        is Result.Success -> pokemon.copy(detail = detail.data)
+                                        is Result.Failure -> pokemon
+                                    }
+                                }
+                            }
+                            if (detailedPokemons != null) {
+                                pokemons.postValue(Result.Success(detailedPokemons))
+                            } else {
+                                pokemons.postValue(Result.Failure(Exception("Failed to load Pokemon details")))
+                            }
+                        }
+                        _state.value = _state.value.copy(isLoading = false)
+                    }
                 } catch (e: Exception) {
-                    errorMessage.postValue(e.message)
+                    withContext(Dispatchers.Main) { // Switch back to main thread to update UI
+                        errorMessage.postValue(e.message)
+                    }
                 } catch (e: UnknownHostException) {
-                   errorMessage.postValue("No internet connection")
+                    withContext(Dispatchers.Main) { // Switch back to main thread to update UI
+                        errorMessage.postValue("No internet connection")
+                    }
                 }
             }
         }
-        Log.d("PokemonViewModel", "load end")
     }
 }
 

@@ -1,18 +1,17 @@
 package com.goodrequest.hiring.ui
 
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.Button
 import androidx.compose.material.Card
@@ -36,13 +35,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.AbstractSavedStateViewModelFactory
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelLazy
-import coil.compose.rememberImagePainter
+import coil.compose.AsyncImage
 import com.goodrequest.hiring.PokemonApi
 import com.goodrequest.hiring.R
 
@@ -100,28 +100,38 @@ class PokemonActivity: ComponentActivity() {
                             modifier = Modifier
                                 .padding(8.dp)
                                 .fillMaxWidth()
-                                .clickable { /* Handle click here */ }
                         ) {
-                            Column {
-                                pokemon.detail?.let { detail ->
+                            Row {
+                                if (pokemon.detail == null) {
+                                    // Display placeholder image for Pokemon with failed details
                                     Image(
-                                        painter = rememberImagePainter(detail.image) {
-                                            crossfade(true)
-                                            placeholder(R.drawable.ic_launcher_foreground)
-                                        },
-                                        contentDescription = null,
-                                        modifier = Modifier.size(100.dp)
+                                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                                        contentDescription = "Placeholder image for ${pokemon.name}",
+                                        modifier = Modifier.fillMaxHeight()
                                     )
-                                    Text(
-                                        text = "Move: ${detail.move}",
-                                        modifier = Modifier.padding(16.dp)
-                                    )
-                                    Text(
-                                        text = "Weight: ${detail.weight}",
-                                        modifier = Modifier.padding(16.dp)
-                                    )
+                                } else {
+                                    pokemon.detail.let { detail ->
+                                        AsyncImage(
+                                            model = detail.image,
+                                            contentDescription = null,
+                                            placeholder = painterResource(id = R.drawable.ic_launcher_foreground),
+                                            modifier = Modifier.fillMaxHeight()
+                                        )
+                                    }
                                 }
-                                Text(text = pokemon.name, modifier = Modifier.padding(16.dp))
+                                Column {
+                                    Text(text = pokemon.name, modifier = Modifier.padding(16.dp))
+                                    pokemon.detail?.let { detail ->
+                                        Text(
+                                            text = "Move: ${detail.move}",
+                                            modifier = Modifier.padding(16.dp)
+                                        )
+                                        Text(
+                                            text = "Weight: ${detail.weight}",
+                                            modifier = Modifier.padding(16.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -134,7 +144,6 @@ class PokemonActivity: ComponentActivity() {
                 )
                 LaunchedEffect(vm.state.value.errorMessage) {
                     if (errorMessage != null) {
-                        Log.d("PokemonViewModel", "showSnackbar")
                         snackbarHostState.showSnackbar(
                             message = errorMessage,
                             actionLabel = "Zavřít",
