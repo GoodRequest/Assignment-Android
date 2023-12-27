@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.Button
 import androidx.compose.material.Card
 import androidx.compose.material.CircularProgressIndicator
@@ -29,9 +30,11 @@ import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -45,6 +48,7 @@ import androidx.lifecycle.ViewModelLazy
 import coil.compose.AsyncImage
 import com.goodrequest.hiring.PokemonApi
 import com.goodrequest.hiring.R
+import kotlinx.coroutines.launch
 
 class PokemonActivity: ComponentActivity() {
 
@@ -80,9 +84,17 @@ class PokemonActivity: ComponentActivity() {
             refreshing = vm.state.value.isLoading,
             onRefresh = { vm.load(forceRefresh = true) }
         )
+        val lazyColumnListState = rememberLazyListState()
+        val coroutineScope = rememberCoroutineScope()
+        val shouldStartPaginate = remember {
+            derivedStateOf {
+                vm.canPaginate && (lazyColumnListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -9) >= (lazyColumnListState.layoutInfo.totalItemsCount - 1)
+            }
+        }
         val snackbarHostState = remember { SnackbarHostState() }
         Scaffold(
-            topBar = { TopAppBar(title = { Text("Gotta Catch 'Em All!") }) },
+            // show pokemons count
+            topBar = { TopAppBar(title = { Text("Gotta Catch 'Em All! Loaded: ${(pokemons.size)}") }) },
             snackbarHost = {  SnackbarHost(
                 hostState = snackbarHostState,
             ) },
@@ -93,7 +105,7 @@ class PokemonActivity: ComponentActivity() {
                     .padding(padding)
                     .pullRefresh(pullRefreshState)
             ) {
-                LazyColumn {
+                LazyColumn(state = lazyColumnListState) {
                     items(pokemons.size) { index ->
                         val pokemon = pokemons[index]
                         Card(
@@ -134,6 +146,13 @@ class PokemonActivity: ComponentActivity() {
                                 }
                             }
                         }
+                        if (index == pokemons.size - 1) {
+                            LaunchedEffect(remember {
+                                derivedStateOf { lazyColumnListState.firstVisibleItemIndex }
+                            }) {
+                                vm.load()
+                            }
+                        }
                     }
                 }
                 PullRefreshIndicator(
@@ -151,7 +170,7 @@ class PokemonActivity: ComponentActivity() {
                         )
                     }
                 }
-                }
+            }
             }
         }
     }
@@ -174,6 +193,14 @@ class PokemonActivity: ComponentActivity() {
 sealed class Result<out T> {
     data class Success<out T>(val data: T) : Result<T>()
     data class Failure(val exception: Exception) : Result<Nothing>()
+}
+
+enum class ListState {
+    IDLE,
+    LOADING,
+    PAGINATING,
+    ERROR,
+    PAGINATION_EXHAUST,
 }
 
 /**
