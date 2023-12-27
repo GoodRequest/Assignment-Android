@@ -31,9 +31,9 @@ private suspend fun <T> OkHttpClient.httpGet(url: HttpUrl, parse: (String) -> T)
         val good: Request = Request.Builder().url(url).get().build()
         val result = newCall(good).await()
         val parsed = parse(result.body!!.string())
-        Result.success(parsed)
+        Result.Success(parsed)
     } catch (e: Exception) {
-        Result.failure(e)
+        Result.Failure(e)
     }
 
 private fun parsePokemons(json: String): List<Pokemon> =
